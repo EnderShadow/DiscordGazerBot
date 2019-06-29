@@ -14,6 +14,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.*
+import kotlin.system.exitProcess
 
 lateinit var bot: JDA
     private set
@@ -86,7 +87,7 @@ class UtilityListener: ListenerAdapter()
     override fun onShutdown(event: ShutdownEvent)
     {
         save()
-        System.exit(shutdownMode.ordinal)
+        exitProcess(shutdownMode.ordinal)
     }
 }
 

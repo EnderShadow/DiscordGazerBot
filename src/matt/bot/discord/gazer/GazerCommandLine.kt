@@ -39,6 +39,10 @@ fun commandLine(bot: JDA)
             "shutdown" -> shutdownBot(bot)
             "reload" -> reloadBot(bot)
             "ping" -> println("pong")
+            "resetPresence" -> {
+                bot.presence.game = Game.playing("DM me suggestions or complaints for the Monster Girls discord")
+                println("Presence has been reset")
+            }
             "selectedTextChannel" -> println(selectedTextChannel?.name)
             "selectedMember" -> println(selectedMember?.effectiveName)
             "list" -> {

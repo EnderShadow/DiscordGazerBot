@@ -7,7 +7,12 @@ fun runCommand(command: String, tokenizer: Tokenizer, sourceMessage: Message)
     if(!sourceMessage.channelType.isGuild)
         Command[command].takeIf {it.allowedInPrivateChannel}?.invoke(tokenizer, sourceMessage)
     else
-        Command[command](tokenizer, sourceMessage)
+        Command[command].let {
+            if(!it.requiresAdmin || isServerAdmin(sourceMessage.member))
+                it(tokenizer, sourceMessage)
+            else
+                sourceMessage.channel.sendMessage("${sourceMessage.member.asMention} You don't have permission to run this command.").queue()
+        }
 }
 
 @Suppress("unused")
@@ -50,23 +55,63 @@ sealed class Command(val prefix: String, val requiresAdmin: Boolean = false, val
         
         override fun invoke(tokenizer: Tokenizer, sourceMessage: Message)
         {
-            if(isServerAdmin(sourceMessage.member))
+            var content = tokenizer.remainingTextAsToken.tokenValue
+            val tts = content.endsWith("!tts")
+            if(tts)
+                content = content.substring(0, content.length - 4).trim()
+            if(content.isNotEmpty())
             {
-                var content = tokenizer.remainingTextAsToken.tokenValue
-                val tts = content.endsWith("!tts")
-                if(tts)
-                    content = content.substring(0, content.length - 4).trim()
-                if(content.isNotEmpty())
-                {
-                    sourceMessage.channel.sendMessage(content).tts(tts).queue()
-                    sourceMessage.delete().queue()
-                    println("${sourceMessage.author.name} made me say \"$content\"")
-                }
-                else
-                {
-                    sourceMessage.channel.sendMessage("I can't say blank messages").queue()
-                }
+                sourceMessage.channel.sendMessage(content).tts(tts).queue()
+                sourceMessage.delete().queue()
+                println("${sourceMessage.author.name} made me say \"$content\"")
             }
+            else
+            {
+                sourceMessage.channel.sendMessage("I can't say blank messages").queue()
+            }
+        }
+    }
+    
+    class Ban: Command("ban", true)
+    {
+        override fun helpMessage() = """`${botPrefix}ban` __Makes the bot ban users with a reason__
+            |
+            |**Usage:** ${botPrefix}ban [reason] [user] ...
+            |              ${botPrefix}say [user] ...
+            |
+            |**Examples:**
+            |`${botPrefix}ban Spamming @JohnSmith @JaneDoe` makes the bot ban the users 'JohnSmith' and 'JaneDoe' with the reason being 'Spamming'.
+            |`${botPrefix}ban "DM Spamming" @JohnSmith @JaneDoe` makes the bot ban the users 'JohnSmith' and 'JaneDoe' with the reason being 'DM Spamming'.
+            |`${botPrefix}ban @JohnSmith @JaneDoe` makes the bot ban the users 'JohnSmith' and 'JaneDoe' with no specified reason.
+        """.trimMargin()
+    
+        override fun invoke(tokenizer: Tokenizer, sourceMessage: Message)
+        {
+            val usersToBan = mutableListOf<User>()
+            var reason = ""
+            if(!tokenizer.hasNext())
+            {
+                sourceMessage.channel.sendMessage("You must specify 1 or more users to ban and optionally provide a reason").queue()
+                return
+            }
+            val firstToken = tokenizer.next()
+            if(firstToken.tokenType != TokenType.USER)
+                reason = firstToken.tokenValue
+            else
+                usersToBan.add(firstToken.objValue as User)
+            
+            for(token in tokenizer)
+                if(token.tokenType == TokenType.USER)
+                    usersToBan.add(token.objValue as User)
+            
+            if(usersToBan.isEmpty())
+            {
+                sourceMessage.channel.sendMessage("You must specify 1 or more users to ban").queue()
+                return
+            }
+            
+            usersToBan.forEach {botGuild.controller.ban(it, 1, reason).queue()}
+            botGuild.getTextChannelById(moderatorChannelId).sendMessage("${sourceMessage.member.asMention} has banned the following users for $reason: ${usersToBan.joinToString(" ") {it.asMention}}").queue()
         }
     }
     
@@ -74,7 +119,8 @@ sealed class Command(val prefix: String, val requiresAdmin: Boolean = false, val
     {
         override fun helpMessage() = """`${botPrefix}help` __Displays a list of commands. Provide a command to get its info__
             |
-            |**Usage:** ${botPrefix}help [command]
+            |**Usage:** ${botPrefix}help
+            |              ${botPrefix}help [command]
             |
             |**Examples:**
             |`${botPrefix}help` displays a list of all commands

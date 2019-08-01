@@ -1,12 +1,13 @@
 package matt.bot.discord.gazer
 
 import net.dv8tion.jda.core.JDA
+import net.dv8tion.jda.core.Permission
 import net.dv8tion.jda.core.entities.Member
 import net.dv8tion.jda.core.entities.Message
 
 fun countMentions(message: Message) = message.mentionedChannels.size + message.mentionedRoles.size + message.mentionedUsers.size + if(message.mentionsEveryone()) 1 else 0
 
-fun isServerAdmin(member: Member) = member.isOwner || member.roles.intersect(adminRoles).isNotEmpty()
+fun isServerAdmin(member: Member) = member.isOwner || member.roles.intersect(adminRoles).isNotEmpty() || member.hasPermission(Permission.ADMINISTRATOR) || member.hasPermission(Permission.MANAGE_SERVER)
 
 fun reloadBot(bot: JDA)
 {

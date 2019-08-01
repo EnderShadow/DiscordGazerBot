@@ -43,6 +43,27 @@ fun commandLine(bot: JDA)
                 bot.presence.game = Game.playing("DM me suggestions or complaints for the Monster Girls discord")
                 println("Presence has been reset")
             }
+            "react" -> {
+                if(tokenizer.hasNext())
+                {
+                    val channelId = tokenizer.next().tokenValue
+                    if(tokenizer.hasNext())
+                    {
+                        val channel = botGuild.getTextChannelById(channelId)
+                        val messageId = tokenizer.next().tokenValue
+                        channel.getMessageById(messageId).queue {message ->
+                            for(reaction in tokenizer)
+                            {
+                                val emote = botGuild.getEmotesByName(reaction.tokenValue, false).firstOrNull()
+                                if(emote != null)
+                                    message.addReaction(emote).queue()
+                                else
+                                    message.addReaction(reaction.tokenValue).queue()
+                            }
+                        }
+                    }
+                }
+            }
             "selectedTextChannel" -> println(selectedTextChannel?.name)
             "selectedMember" -> println(selectedMember?.effectiveName)
             "list" -> {
@@ -167,6 +188,8 @@ private fun getMessage(id: String): Message?
 
 private class CommandLineMessage(private val guild: Guild, private val member: Member?, private val textChannel: TextChannel?, private val text: String): Message
 {
+    override fun getActivity(): MessageActivity? = null
+    override fun getJumpUrl() = ""
     override fun isFromType(type: ChannelType?) = type == textChannel?.type ?: ChannelType.UNKNOWN
     override fun getGroup() = null
     override fun isEdited() = false
@@ -218,9 +241,9 @@ private class CommandLineMessage(private val guild: Guild, private val member: M
 private class FakeAuditableRestAction<T>: AuditableRestAction<T>(bot, null)
 {
     override fun handleResponse(response: Response?, request: Request<T>?) {}
-    override fun queue(success: Consumer<T>?, failure: Consumer<Throwable>?) {}
+    override fun queue(success: Consumer<in T>?, failure: Consumer<in Throwable>?) {}
     override fun complete(shouldQueue: Boolean): T? = null
-    override fun queueAfter(delay: Long, unit: TimeUnit?, success: Consumer<T>?, failure: Consumer<Throwable>?, executor: ScheduledExecutorService?): ScheduledFuture<*>
+    override fun queueAfter(delay: Long, unit: TimeUnit?, success: Consumer<in T>?, failure: Consumer<in Throwable>?, executor: ScheduledExecutorService?): ScheduledFuture<*>
     {
         @Suppress("UNCHECKED_CAST")
         return Proxy.newProxyInstance(this::class.java.classLoader, arrayOf(ScheduledFuture::class.java), NOPHandler) as ScheduledFuture<*>
@@ -241,9 +264,9 @@ private class FakeAuditableRestAction<T>: AuditableRestAction<T>(bot, null)
 private class FakeMessageAction(textChannel: TextChannel?): MessageAction(bot, null, textChannel)
 {
     override fun handleResponse(response: Response?, request: Request<Message>?) {}
-    override fun queue(success: Consumer<Message>?, failure: Consumer<Throwable>?) {}
+    override fun queue(success: Consumer<in Message>?, failure: Consumer<in Throwable>?) {}
     override fun complete(shouldQueue: Boolean): Message? = null
-    override fun queueAfter(delay: Long, unit: TimeUnit?, success: Consumer<Message>?, failure: Consumer<Throwable>?, executor: ScheduledExecutorService?): ScheduledFuture<*>
+    override fun queueAfter(delay: Long, unit: TimeUnit?, success: Consumer<in Message>?, failure: Consumer<in Throwable>?, executor: ScheduledExecutorService?): ScheduledFuture<*>
     {
         @Suppress("UNCHECKED_CAST")
         return Proxy.newProxyInstance(this::class.java.classLoader, arrayOf(ScheduledFuture::class.java), NOPHandler) as ScheduledFuture<*>

@@ -111,7 +111,9 @@ sealed class Command(val prefix: String, val requiresAdmin: Boolean = false, val
             }
             
             usersToBan.forEach {botGuild.controller.ban(it, 1, reason).queue()}
-            botGuild.getTextChannelById(moderatorChannelId).sendMessage("${sourceMessage.member.asMention} has banned the following users for $reason: ${usersToBan.joinToString(" ") {it.asMention}}").queue()
+            moderatorChannel?.let {
+                it.sendMessage("${sourceMessage.member.asMention} has banned the following users for $reason: ${usersToBan.joinToString(" ") {it.asMention}}").queue()
+            } ?: println("moderator channel is null")
         }
     }
     

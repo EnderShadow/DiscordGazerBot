@@ -226,7 +226,7 @@ fun checkForSpam(event: MessageReceivedEvent)
         // bans the user if they spammed mentions for a fifth (or more) time within the last 10 seconds
         if(count >= 5)
         {
-            takeActionAgainstUser(event.member, true, "Spamming mentions")
+            takeActionAgainstUser(event.member, true, "Spamming mentions", event.message)
             mentionSpammers.remove(event.member)
         }
         else
@@ -254,7 +254,7 @@ fun checkForSpam(event: MessageReceivedEvent)
             if(messageInfo.second == 4)
             {
                 // This message makes it the 5th
-                takeActionAgainstUser(event.member, true, "Spamming")
+                takeActionAgainstUser(event.member, true, "Spamming", event.message)
                 spamMap.remove(event.member)
             }
             else
@@ -273,7 +273,7 @@ fun checkForSpam(event: MessageReceivedEvent)
     }
 }
 
-fun takeActionAgainstUser(member: Member, ban: Boolean, reason: String)
+fun takeActionAgainstUser(member: Member, ban: Boolean, reason: String, message: Message)
 {
     val actionRole = member.guild.getRoleById(detentionRoleId)
     if(actionRole !in member.roles)
@@ -281,7 +281,7 @@ fun takeActionAgainstUser(member: Member, ban: Boolean, reason: String)
         member.guild.controller.addSingleRoleToMember(member, actionRole).queue()
 
         moderatorChannel?.let {
-            it.sendMessage(adminRoles.joinToString(" ", postfix = "\n${member.asMention} has been detected spamming and was given ${actionRole.asMention}") {it.asMention}).queue()
+            it.sendMessage(adminRoles.joinToString(" ", postfix = "\n${member.asMention} has been detected spamming in <#${message.channel.id}> and was given ${actionRole.asMention}") {it.asMention}).queue()
         } ?: println("moderator channel is null")
 
         val detentionChannel = member.guild.getTextChannelsByName("detention", true).firstOrNull()

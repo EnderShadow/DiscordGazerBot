@@ -1,9 +1,9 @@
 package matt.bot.discord.gazer
 
-import net.dv8tion.jda.core.JDA
-import net.dv8tion.jda.core.Permission
-import net.dv8tion.jda.core.entities.Member
-import net.dv8tion.jda.core.entities.Message
+import net.dv8tion.jda.api.JDA
+import net.dv8tion.jda.api.Permission
+import net.dv8tion.jda.api.entities.Member
+import net.dv8tion.jda.api.entities.Message
 
 fun countMentions(message: Message) = message.mentionedChannels.size + message.mentionedRoles.size + message.mentionedUsers.size + if(message.mentionsEveryone()) 1 else 0
 

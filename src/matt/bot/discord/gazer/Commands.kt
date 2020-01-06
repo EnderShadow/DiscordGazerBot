@@ -1,6 +1,6 @@
 package matt.bot.discord.gazer
 
-import net.dv8tion.jda.core.entities.*
+import net.dv8tion.jda.api.entities.*
 
 fun runCommand(command: String, tokenizer: Tokenizer, sourceMessage: Message)
 {
@@ -8,10 +8,10 @@ fun runCommand(command: String, tokenizer: Tokenizer, sourceMessage: Message)
         Command[command].takeIf {it.allowedInPrivateChannel}?.invoke(tokenizer, sourceMessage)
     else
         Command[command].let {
-            if(!it.requiresAdmin || isServerAdmin(sourceMessage.member))
+            if(!it.requiresAdmin || isServerAdmin(sourceMessage.member!!))
                 it(tokenizer, sourceMessage)
             else
-                sourceMessage.channel.sendMessage("${sourceMessage.member.asMention} You don't have permission to run this command.").queue()
+                sourceMessage.channel.sendMessage("${sourceMessage.member!!.asMention} You don't have permission to run this command.").queue()
         }
 }
 
@@ -110,9 +110,9 @@ sealed class Command(val prefix: String, val requiresAdmin: Boolean = false, val
                 return
             }
             
-            usersToBan.forEach {botGuild.controller.ban(it, 1, reason).queue()}
+            usersToBan.forEach {botGuild.ban(it, 1, reason).queue()}
             moderatorChannel?.let {
-                it.sendMessage("${sourceMessage.member.asMention} has banned the following users for $reason: ${usersToBan.joinToString(" ") {it.asMention}}").queue()
+                it.sendMessage("${sourceMessage.member!!.asMention} has banned the following users for $reason: ${usersToBan.joinToString(" ") {it.asMention}}").queue()
             } ?: println("moderator channel is null")
         }
     }

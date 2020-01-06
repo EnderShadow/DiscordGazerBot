@@ -1,16 +1,16 @@
 package matt.bot.discord.gazer
 
-import net.dv8tion.jda.core.AccountType
-import net.dv8tion.jda.core.EmbedBuilder
-import net.dv8tion.jda.core.JDA
-import net.dv8tion.jda.core.JDABuilder
-import net.dv8tion.jda.core.entities.*
-import net.dv8tion.jda.core.events.ReadyEvent
-import net.dv8tion.jda.core.events.ShutdownEvent
-import net.dv8tion.jda.core.events.guild.member.GuildMemberJoinEvent
-import net.dv8tion.jda.core.events.message.MessageReceivedEvent
-import net.dv8tion.jda.core.events.message.MessageUpdateEvent
-import net.dv8tion.jda.core.hooks.ListenerAdapter
+import net.dv8tion.jda.api.AccountType
+import net.dv8tion.jda.api.EmbedBuilder
+import net.dv8tion.jda.api.JDA
+import net.dv8tion.jda.api.JDABuilder
+import net.dv8tion.jda.api.entities.*
+import net.dv8tion.jda.api.events.ReadyEvent
+import net.dv8tion.jda.api.events.ShutdownEvent
+import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent
+import net.dv8tion.jda.api.events.message.MessageUpdateEvent
+import net.dv8tion.jda.api.hooks.ListenerAdapter
 import org.apache.commons.codec.digest.DigestUtils
 import java.awt.Color
 import java.io.ByteArrayInputStream
@@ -49,18 +49,18 @@ fun main(args: Array<String>)
     val token = File("token").readText()
     bot = JDABuilder(AccountType.BOT)
         .setToken(token)
-        .addEventListener(UtilityListener(), MessageListener())
+        .addEventListeners(UtilityListener(), MessageListener())
         .build()
         .awaitReady()
     bot.addEventListener()
     
-    botGuild = bot.getGuildById(guildId)
+    botGuild = bot.getGuildById(guildId)!!
     
     suggestionChannel = botGuild.getTextChannelsByName("suggestions", true).firstOrNull()
     moderatorChannel = botGuild.getTextChannelsByName("moderators", true).firstOrNull()
     
-    adminRoles.add(botGuild.getRoleById(adminRoleId))
-    adminRoles.add(botGuild.getRoleById(moderatorRoleId))
+    adminRoles.add(botGuild.getRoleById(adminRoleId)!!)
+    adminRoles.add(botGuild.getRoleById(moderatorRoleId)!!)
     
     for(guild in bot.guilds)
         if(guild.id != guildId)
@@ -90,7 +90,7 @@ class UtilityListener: ListenerAdapter()
     {
         event.jda.isAutoReconnect = true
         println("Logged in as ${event.jda.selfUser.name}\n${event.jda.selfUser.id}\n-----------------------------")
-        event.jda.presence.game = Game.playing("DM me suggestions or complaints for the Monster Girls discord")
+        event.jda.presence.activity = Activity.playing("DM me suggestions or complaints for the Monster Girls discord")
     }
 
     override fun onShutdown(event: ShutdownEvent)
@@ -179,7 +179,7 @@ class MessageListener: ListenerAdapter()
             val updatedSuggestion = event.message
             val suggestionMetaData = suggestions.first {it.second == updatedSuggestion.id}
             suggestions.remove(suggestionMetaData)
-            val forwardedMessage = suggestionChannel?.getMessageById(suggestionMetaData.third)?.complete()
+            val forwardedMessage = suggestionChannel?.retrieveMessageById(suggestionMetaData.third)?.complete()
             if(forwardedMessage == null)
             {
                 println("suggestion channel is null")
@@ -210,13 +210,13 @@ fun checkForSpam(event: MessageReceivedEvent)
     if(event.channelType == ChannelType.PRIVATE || event.channelType == ChannelType.GROUP || event.isWebhookMessage)
         return
 
-    if(event.member == event.guild.owner || event.member.roles.any {it in adminRoles})
+    if(event.member == event.guild.owner || event.member!!.roles.any {it in adminRoles})
         return
 
     // Checks for users that are spamming mentions
     if(countMentions(event.message) >= 5 || event.message.mentionsEveryone())
     {
-        var (count, lastSpamTime) = mentionSpammers.getOrDefault(event.member, Pair(0, 0L))
+        var (count, lastSpamTime) = mentionSpammers.getOrDefault(event.member!!, Pair(0, 0L))
         val timeDiff = System.currentTimeMillis() - lastSpamTime
         if(timeDiff < 10_000)
             count += 1
@@ -226,8 +226,8 @@ fun checkForSpam(event: MessageReceivedEvent)
         // bans the user if they spammed mentions for a fifth (or more) time within the last 10 seconds
         if(count >= 5)
         {
-            takeActionAgainstUser(event.member, true, "Spamming mentions", event.message)
-            mentionSpammers.remove(event.member)
+            takeActionAgainstUser(event.member!!, true, "Spamming mentions", event.message)
+            mentionSpammers.remove(event.member!!)
         }
         else
         {
@@ -236,15 +236,15 @@ fun checkForSpam(event: MessageReceivedEvent)
                 if(System.currentTimeMillis() - value.second > 10_000)
                     mentionSpammers.remove(key)
             }
-            mentionSpammers[event.member] = Pair(count, System.currentTimeMillis())
+            mentionSpammers[event.member!!] = Pair(count, System.currentTimeMillis())
         }
     }
 
     // Checks for users that are spamming the same stuff over and over again
-    val messageInfo = spamMap[event.member]
+    val messageInfo = spamMap[event.member!!]
     if(messageInfo == null)
     {
-        spamMap[event.member] = Triple(hashMessage(event.message), 1, System.currentTimeMillis())
+        spamMap[event.member!!] = Triple(hashMessage(event.message), 1, System.currentTimeMillis())
     }
     else
     {
@@ -254,17 +254,17 @@ fun checkForSpam(event: MessageReceivedEvent)
             if(messageInfo.second == 4)
             {
                 // This message makes it the 5th
-                takeActionAgainstUser(event.member, true, "Spamming", event.message)
-                spamMap.remove(event.member)
+                takeActionAgainstUser(event.member!!, true, "Spamming", event.message)
+                spamMap.remove(event.member!!)
             }
             else
             {
-                spamMap[event.member] = Triple(messageHash, messageInfo.second + 1, System.currentTimeMillis())
+                spamMap[event.member!!] = Triple(messageHash, messageInfo.second + 1, System.currentTimeMillis())
             }
         }
         else
         {
-            spamMap[event.member] = Triple(hashMessage(event.message), 1, System.currentTimeMillis())
+            spamMap[event.member!!] = Triple(hashMessage(event.message), 1, System.currentTimeMillis())
             spamMap.entries.toList().forEach {(key, value) ->
                 if(System.currentTimeMillis() - value.third > 5_000)
                     spamMap.remove(key)
@@ -275,10 +275,10 @@ fun checkForSpam(event: MessageReceivedEvent)
 
 fun takeActionAgainstUser(member: Member, ban: Boolean, reason: String, message: Message)
 {
-    val actionRole = member.guild.getRoleById(detentionRoleId)
+    val actionRole = member.guild.getRoleById(detentionRoleId)!!
     if(actionRole !in member.roles)
     {
-        member.guild.controller.addSingleRoleToMember(member, actionRole).queue()
+        member.guild.addRoleToMember(member, actionRole).queue()
 
         moderatorChannel?.let {
             it.sendMessage(adminRoles.joinToString(" ", postfix = "\n${member.asMention} has been detected spamming in <#${message.channel.id}> and was given ${actionRole.asMention}") {it.asMention}).queue()
@@ -296,7 +296,7 @@ fun hashMessage(message: Message): ByteArray
 {
     val messageDigest = DigestUtils.getSha256Digest()
     messageDigest.update(message.contentRaw.toByteArray())
-    message.attachments.forEach {messageDigest.update(retry(10) {it.inputStream.toByteArray()})}
+    message.attachments.forEach {messageDigest.update(retry(10) {it.retrieveInputStream().get().toByteArray()})}
     return messageDigest.digest()
 }
 

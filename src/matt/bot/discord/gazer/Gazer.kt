@@ -112,7 +112,7 @@ class UtilityListener: ListenerAdapter()
         userEmbedBuilder.setAuthor("${member.user.name}#${member.user.discriminator}", null, member.user.effectiveAvatarUrl)
         userEmbedBuilder.setThumbnail(member.user.effectiveAvatarUrl)
         userEmbedBuilder.addField("ID", member.user.id, true)
-        val creationDate = Date(member.user.idLong / 4194304L + 1420070400000L)
+        val creationDate = member.timeCreated
         userEmbedBuilder.addField("Account Created", creationDate.toString(), true)
         if(creationDate.toInstant().isBefore(Instant.now().minus(7, ChronoUnit.DAYS)))
             userEmbedBuilder.setColor(Color.GREEN)
@@ -152,7 +152,8 @@ class MessageListener: ListenerAdapter()
             val suggestion = event.message
             try
             {
-                suggestionChannel?.sendMessage("A suggestion/complaint has been submitted: ${suggestion.contentRaw}")?.queue {
+                val content = suggestion.contentRaw.replace("@everyone", "@\u200Beveryone")
+                suggestionChannel?.sendMessage("A suggestion/complaint has been submitted: $content")?.queue {
                     event.channel.sendMessage("Thank you for making a suggestion or complaint. It has been anonymously forwarded to the moderation team").queue()
                     if(suggestion.attachments.isNotEmpty())
                         event.channel.sendMessage("1 or more attachments were found in your message. Attachments are not sent as part of a suggestion. Use links instead.").queue()
@@ -187,7 +188,8 @@ class MessageListener: ListenerAdapter()
             }
             try
             {
-                forwardedMessage.editMessage("A suggestion/complaint has been submitted: ${updatedSuggestion.contentRaw}").queue {
+                val content = updatedSuggestion.contentRaw.replace("@everyone", "@\u200Beveryone")
+                forwardedMessage.editMessage("A suggestion/complaint has been submitted: $content").queue {
                     event.channel.sendMessage("Your suggestion or complaint has been successfully updated").queue()
                     suggestions.add(Triple(System.currentTimeMillis(), updatedSuggestion.id, it.id))
                 }

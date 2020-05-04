@@ -4,10 +4,14 @@ import net.dv8tion.jda.api.AccountType
 import net.dv8tion.jda.api.EmbedBuilder
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
+import net.dv8tion.jda.api.audit.ActionType
+import net.dv8tion.jda.api.audit.TargetType
 import net.dv8tion.jda.api.entities.*
 import net.dv8tion.jda.api.events.ReadyEvent
 import net.dv8tion.jda.api.events.ShutdownEvent
+import net.dv8tion.jda.api.events.guild.GuildBanEvent
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent
+import net.dv8tion.jda.api.events.guild.member.GuildMemberLeaveEvent
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent
 import net.dv8tion.jda.api.events.message.MessageUpdateEvent
 import net.dv8tion.jda.api.hooks.ListenerAdapter
@@ -19,6 +23,7 @@ import java.io.InputStream
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 lateinit var bot: JDA
@@ -122,6 +127,49 @@ class UtilityListener: ListenerAdapter()
         channel.sendMessage(userEmbedBuilder.build()).queue()
         channel.sendMessage(member.user.asMention).queue()
     }
+    
+    override fun onGuildBan(event: GuildBanEvent) {
+        val channel = botGuild.getTextChannelsByName("bans", true).firstOrNull()
+        if(channel == null) {
+            println("bans channel is null")
+            return
+        }
+        val user = event.user
+        val embedBuilder = EmbedBuilder()
+        botGuild.retrieveAuditLogs().type(ActionType.BAN).queueAfter(2, TimeUnit.SECONDS) {
+            val entry = it.filter {it.targetId == user.id && it.targetType == TargetType.MEMBER}.maxBy {it.timeCreated}
+            if(entry == null) {
+                println("Failed to find ban in audit log. Try increasing the delay.")
+            }
+            else {
+                embedBuilder.appendDescription(":x: **${user.name}#${user.discriminator}** was `banned`. (${user.id})\n\n*by* ${entry.user!!.asMention}\n**Reason:** ${entry.reason ?: "Not Specified"}")
+                channel.sendMessage(embedBuilder.build()).queue()
+            }
+        }
+    }
+    
+    override fun onGuildMemberLeave(event: GuildMemberLeaveEvent) {
+        val channel = botGuild.getTextChannelsByName("bans", true).firstOrNull()
+        if(channel == null) {
+            println("bans channel is null")
+            return
+        }
+        val user = event.user
+        val embedBuilder = EmbedBuilder()
+        botGuild.retrieveAuditLogs().type(ActionType.KICK).queueAfter(2, TimeUnit.SECONDS) {
+            val entry = it.filter {it.targetId == user.id && it.targetType == TargetType.MEMBER}.maxBy {it.timeCreated}
+            if(entry == null) {
+                println("Failed to find kick in audit log. Try increasing the delay.")
+            }
+            else if(entry.timeCreated.toInstant().isBefore(Instant.now().minus(1, ChronoUnit.MINUTES))) {
+                println("Old kick found. Not putting message in bans channel.")
+            }
+            else {
+                embedBuilder.appendDescription(":x: **${user.name}#${user.discriminator}** was `kicked`. (${user.id})\n\n*by* ${entry.user!!.asMention}\n**Reason:** ${entry.reason ?: "Not Specified"}")
+                channel.sendMessage(embedBuilder.build()).queue()
+            }
+        }
+    }
 }
 
 class MessageListener: ListenerAdapter()
@@ -214,9 +262,11 @@ fun checkForSpam(event: MessageReceivedEvent)
 
     if(event.member == event.guild.owner || event.member!!.roles.any {it in adminRoles})
         return
-
+    
+    val isOldUser = event.member!!.timeJoined.toInstant().isBefore(Instant.now().minus(7, ChronoUnit.DAYS))
+    val spamThreshold = if(isOldUser) 15 else 5
     // Checks for users that are spamming mentions
-    if(countMentions(event.message) >= 5 || event.message.mentionsEveryone())
+    if(countMentions(event.message) >= spamThreshold || event.message.mentionsEveryone())
     {
         var (count, lastSpamTime) = mentionSpammers.getOrDefault(event.member!!, Pair(0, 0L))
         val timeDiff = System.currentTimeMillis() - lastSpamTime
@@ -226,7 +276,7 @@ fun checkForSpam(event: MessageReceivedEvent)
             count = 1
 
         // bans the user if they spammed mentions for a fifth (or more) time within the last 10 seconds
-        if(count >= 5)
+        if(count >= spamThreshold)
         {
             takeActionAgainstUser(event.member!!, true, "Spamming mentions", event.message)
             mentionSpammers.remove(event.member!!)
@@ -243,6 +293,7 @@ fun checkForSpam(event: MessageReceivedEvent)
     }
 
     // Checks for users that are spamming the same stuff over and over again
+    val repeatedMessageTime = if(isOldUser) 5_000 else 60_000
     val messageInfo = spamMap[event.member!!]
     if(messageInfo == null)
     {
@@ -251,11 +302,11 @@ fun checkForSpam(event: MessageReceivedEvent)
     else
     {
         val messageHash = hashMessage(event.message)
-        if(messageInfo.first.contentEquals(messageHash) && System.currentTimeMillis() - messageInfo.third < 5_000)
+        if(messageInfo.first.contentEquals(messageHash) && System.currentTimeMillis() - messageInfo.third < repeatedMessageTime)
         {
-            if(messageInfo.second == 4)
+            if(messageInfo.second == (if(isOldUser) 4 else 2))
             {
-                // This message makes it the 5th
+                // This message makes it the 5th (or 3rd if they're a new user)
                 takeActionAgainstUser(event.member!!, true, "Spamming", event.message)
                 spamMap.remove(event.member!!)
             }
@@ -268,7 +319,7 @@ fun checkForSpam(event: MessageReceivedEvent)
         {
             spamMap[event.member!!] = Triple(hashMessage(event.message), 1, System.currentTimeMillis())
             spamMap.entries.toList().forEach {(key, value) ->
-                if(System.currentTimeMillis() - value.third > 5_000)
+                if(System.currentTimeMillis() - value.third > repeatedMessageTime)
                     spamMap.remove(key)
             }
         }
@@ -297,6 +348,7 @@ fun takeActionAgainstUser(member: Member, ban: Boolean, reason: String, message:
 fun hashMessage(message: Message): ByteArray
 {
     val messageDigest = DigestUtils.getSha256Digest()
+    messageDigest.update(message.channel.name.toByteArray())
     messageDigest.update(message.contentRaw.toByteArray())
     message.attachments.forEach {messageDigest.update(retry(10) {it.retrieveInputStream().get().toByteArray()})}
     return messageDigest.digest()

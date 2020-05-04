@@ -160,28 +160,31 @@ class Tokenizer(text: String): Iterator<Token>
 
 data class Token(val tokenType: TokenType, val tokenValue: String, val rawValue: String = tokenValue)
 {
-    val objValue: Any? = try
-    {
-        when(tokenType)
-        {
-    
-            TokenType.COMMAND -> Command[tokenValue]
-            TokenType.USER -> bot.getUserById(tokenValue)
-            TokenType.ROLE -> bot.getRoleById(tokenValue)
-            TokenType.TEXT_CHANNEL -> bot.getTextChannelById(tokenValue)
-            TokenType.TEXT -> tokenValue
-            TokenType.NUMBER -> tokenValue.toLongOrNull() ?: tokenValue.toDouble()
-            TokenType.RANGE ->
-            {
-                val nums = tokenValue.split("-")
-                nums[0].toLong()..nums[1].toLong()
+    val objValue: Any? by lazy {
+        try {
+            when(tokenType) {
+            
+                TokenType.COMMAND -> Command[tokenValue]
+                TokenType.USER -> try {
+                    bot.retrieveUserById(tokenValue).complete()
+                }
+                catch(_: Exception) {
+                    null
+                }
+                TokenType.ROLE -> bot.getRoleById(tokenValue)
+                TokenType.TEXT_CHANNEL -> bot.getTextChannelById(tokenValue)
+                TokenType.TEXT -> tokenValue
+                TokenType.NUMBER -> tokenValue.toLongOrNull() ?: tokenValue.toDouble()
+                TokenType.RANGE -> {
+                    val nums = tokenValue.split("-")
+                    nums[0].toLong()..nums[1].toLong()
+                }
             }
         }
-    }
-    catch(_: Exception)
-    {
-        println("Token objValue parsing failed\n Raw value: $rawValue\n Token value: $tokenValue\n Token type: $tokenType")
-        null
+        catch(_: Exception) {
+            println("Token objValue parsing failed\n Raw value: $rawValue\n Token value: $tokenValue\n Token type: $tokenType")
+            null
+        }
     }
 }
 

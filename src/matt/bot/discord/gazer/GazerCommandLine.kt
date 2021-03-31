@@ -14,6 +14,7 @@ import java.io.InputStream
 import java.time.OffsetDateTime
 import java.util.*
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import java.util.function.BiConsumer
 import java.util.function.BooleanSupplier
 import java.util.function.Consumer
@@ -197,6 +198,8 @@ private class CommandLineMessage(private val guild: Guild, private val member: M
     override fun addReaction(emote: Emote): RestAction<Void> = FakeAuditableRestAction()
     override fun addReaction(unicode: String): RestAction<Void> = FakeAuditableRestAction()
     override fun clearReactions(): RestAction<Void> = FakeAuditableRestAction()
+    override fun clearReactions(emote: String): RestAction<Void> = FakeAuditableRestAction()
+    override fun clearReactions(emote: Emote): RestAction<Void> = FakeAuditableRestAction()
     override fun getReactionById(id: String) = null
     override fun getReactionById(id: Long) = null
     override fun formatTo(p0: Formatter?, p1: Int, p2: Int, p3: Int) {}
@@ -275,7 +278,8 @@ private class FakeAuditableRestAction<T>: AuditableRestAction<T>
     }
     
     override fun setCheck(checks: BooleanSupplier?) = this
-    
+    override fun timeout(time: Long, unit: TimeUnit): AuditableRestAction<T> = this
+    override fun deadline(time: Long): AuditableRestAction<T> = this
 }
 
 private class FakeMessageAction(private val textChannel: TextChannel?): MessageAction
@@ -310,9 +314,15 @@ private class FakeMessageAction(private val textChannel: TextChannel?): MessageA
     override fun nonce(nonce: String?) = this
     override fun apply(message: Message?) = this
     override fun override(bool: Boolean) = this
+    override fun allowedMentions(p0: MutableCollection<Message.MentionType>?) = this
+    override fun mention(vararg p0: IMentionable?) = this
+    override fun mentionUsers(vararg p0: String?) = this
+    override fun mentionRoles(vararg p0: String?) = this
     
     override fun queue(success: Consumer<in Message>?, failure: Consumer<in Throwable>?) {
         failure?.accept(UnsupportedOperationException())
     }
     
+    override fun timeout(time: Long, unit: TimeUnit): MessageAction = this
+    override fun deadline(time: Long): MessageAction = this
 }

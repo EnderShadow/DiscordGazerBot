@@ -154,6 +154,12 @@ class Tokenizer(text: String): Iterator<Token>
                 }
             }
         }
+        
+        if(index > 0) {
+            currentToken = toToken(botPrefix, remainingText.substring(0, index))
+            remainingText = ""
+            return currentToken
+        }
         throw NoSuchElementException()
     }
 }

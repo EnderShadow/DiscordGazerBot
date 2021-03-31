@@ -37,6 +37,15 @@ inline fun <reified T, reified U> Collection<T>.splitAndMap(filter: (T) -> Boole
     return Pair(l1, l2)
 }
 
+inline fun <reified T> retryOrReturn(amt: Int, defaultValue: T, provider: () -> T): T {
+    return try {
+        retry(amt, provider)
+    }
+    catch(_: Throwable) {
+        defaultValue
+    }
+}
+
 inline fun <reified T> retry(amt: Int, provider: () -> T): T
 {
     if(amt <= 0)
@@ -80,4 +89,10 @@ fun String.containsSparse(text: String): Boolean
             return false
     }
     return true
+}
+
+data class SuggestionMetaData(val timestamp: Long, val suggestionMessageId: String, val forwardedSuggestionMessageId: String, val userChannelId: String): Comparable<SuggestionMetaData> {
+    override fun compareTo(other: SuggestionMetaData): Int {
+        return timestamp.compareTo(other.timestamp)
+    }
 }

@@ -120,6 +120,39 @@ sealed class Command(val prefix: String, val requiresAdmin: Boolean = false, val
         }
     }
     
+    class Reply: Command("reply", true)
+    {
+        override fun helpMessage() = """`${botPrefix}reply` __Replies to a suggestion__
+            |
+            |**Usage:** ${botPrefix}reply [suggestion_id] [message]
+            |
+            |**Examples:**
+            |`${botPrefix}reply 1234567890 Your suggestion is bad and you should feel bad.` makes the bot reply to the suggestion with id 123456789 with 'Your suggestion is bad and you should feel bad.'
+        """.trimMargin()
+        
+        override fun invoke(tokenizer: Tokenizer, sourceMessage: Message)
+        {
+            if(!tokenizer.hasNext())
+            {
+                sourceMessage.channel.sendMessage("You must specify a suggestion id").queue()
+                return
+            }
+            val suggestionIdToken = tokenizer.next()
+            if(suggestionIdToken.tokenType != TokenType.NUMBER) {
+                sourceMessage.channel.sendMessage("You must specify a valid suggestion id").queue()
+            }
+            
+            val suggestionId = suggestionIdToken.tokenValue
+            val replyContent = tokenizer.remainingTextAsToken.rawValue
+            suggestions.firstOrNull {it.suggestionMessageId == suggestionId}?.let {
+                val channel = bot.getPrivateChannelById(it.userChannelId) ?: bot.openPrivateChannelById(it.userChannelId).complete()
+                channel?.sendMessage("The mods have replied to your suggestion: $replyContent")?.queue {
+                    sourceMessage.channel.sendMessage("Your reply was successfully sent").queue()
+                }
+            } ?: sourceMessage.channel.sendMessage("Unable to reply to the suggestion because it's either been purged from cache, the user does not exist, or I cannot send a DM to them").queue()
+        }
+    }
+    
     class Help: Command("help", allowedInPrivateChannel = true)
     {
         override fun helpMessage() = """`${botPrefix}help` __Displays a list of commands. Provide a command to get its info__

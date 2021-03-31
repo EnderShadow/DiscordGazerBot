@@ -1,6 +1,5 @@
 package matt.bot.discord.gazer
 
-import net.dv8tion.jda.api.AccountType
 import net.dv8tion.jda.api.EmbedBuilder
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
@@ -11,11 +10,13 @@ import net.dv8tion.jda.api.events.ReadyEvent
 import net.dv8tion.jda.api.events.ShutdownEvent
 import net.dv8tion.jda.api.events.guild.GuildBanEvent
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent
-import net.dv8tion.jda.api.events.guild.member.GuildMemberLeaveEvent
+import net.dv8tion.jda.api.events.guild.member.GuildMemberRemoveEvent
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent
 import net.dv8tion.jda.api.events.message.MessageUpdateEvent
 import net.dv8tion.jda.api.hooks.ListenerAdapter
+import net.dv8tion.jda.api.requests.GatewayIntent
 import org.apache.commons.codec.digest.DigestUtils
+import org.json.JSONObject
 import java.awt.Color
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -42,18 +43,22 @@ const val adminRoleId = "174678690012069888"
 const val moderatorRoleId = "198597919836733441"
 const val detentionRoleId = "390225048709103638"
 
+val saveFile = File("saveData.json")
+
 val adminRoles = mutableSetOf<Role>()
-val suggestions = PriorityQueue<Triple<Long, String, String>> {t1, t2 -> t1.first.compareTo(t2.first)}
+val suggestions = PriorityQueue<SuggestionMetaData>()
 
 val mentionSpammers = mutableMapOf<Member, Pair<Int, Long>>()
 
+var lastJoinTime: Instant = Instant.MAX
+
 var shutdownMode = ExitMode.SHUTDOWN
 
-fun main(args: Array<String>)
+fun main()
 {
+    //Logger.getLogger(OkHttpClient::class.java.name).level = Level.FINE
     val token = File("token").readText()
-    bot = JDABuilder(AccountType.BOT)
-        .setToken(token)
+    bot = JDABuilder.create(token, GatewayIntent.getIntents(GatewayIntent.ALL_INTENTS))
         .addEventListeners(UtilityListener(), MessageListener())
         .build()
         .awaitReady()
@@ -71,6 +76,15 @@ fun main(args: Array<String>)
         if(guild.id != guildId)
             guild.leave().queue()
     
+    load()
+    
+    botGuild.members.filter {it.timeJoined.toInstant() > lastJoinTime}.forEach {
+        val event = GuildMemberJoinEvent(bot, it.timeJoined.toInstant().epochSecond, it)
+        bot.eventManager.handle(event)
+    }
+    
+    botGuild.members.map {it.timeJoined.toInstant()}.max()?.let {lastJoinTime = it}
+    
     while(true)
     {
         try
@@ -84,9 +98,23 @@ fun main(args: Array<String>)
     }
 }
 
+fun load() {
+    if(!saveFile.exists())
+        return
+    
+    val saveData = JSONObject(saveFile.readText())
+    
+    lastJoinTime = Instant.ofEpochSecond(saveData.getLong("lastJoinTimeSec"), saveData.getLong("lastJoinTimeNano"))
+}
+
 fun save()
 {
-    // Currently not used
+    val saveData = JSONObject()
+    
+    saveData.put("lastJoinTimeSec", lastJoinTime.epochSecond)
+    saveData.put("lastJoinTimeNano", lastJoinTime.nano)
+    
+    saveFile.writeText(saveData.toString(4))
 }
 
 class UtilityListener: ListenerAdapter()
@@ -106,6 +134,8 @@ class UtilityListener: ListenerAdapter()
     
     override fun onGuildMemberJoin(event: GuildMemberJoinEvent)
     {
+        lastJoinTime = maxOf(lastJoinTime, event.member.timeJoined.toInstant())
+        
         val channel = botGuild.getTextChannelsByName("joins", true).firstOrNull()
         if(channel == null)
         {
@@ -126,6 +156,8 @@ class UtilityListener: ListenerAdapter()
         
         channel.sendMessage(userEmbedBuilder.build()).queue()
         channel.sendMessage(member.user.asMention).queue()
+        
+        save()
     }
     
     override fun onGuildBan(event: GuildBanEvent) {
@@ -141,6 +173,9 @@ class UtilityListener: ListenerAdapter()
             if(entry == null) {
                 println("Failed to find ban in audit log. Try increasing the delay.")
             }
+            else if(entry.timeCreated.toInstant().isBefore(Instant.now().minus(1, ChronoUnit.MINUTES))) {
+                println("Old ban found. Not putting message in bans channel.")
+            }
             else {
                 embedBuilder.appendDescription(":x: **${user.name}#${user.discriminator}** was `banned`. (${user.id})\n\n*by* ${entry.user!!.asMention}\n**Reason:** ${entry.reason ?: "Not Specified"}")
                 channel.sendMessage(embedBuilder.build()).queue()
@@ -148,7 +183,7 @@ class UtilityListener: ListenerAdapter()
         }
     }
     
-    override fun onGuildMemberLeave(event: GuildMemberLeaveEvent) {
+    override fun onGuildMemberRemove(event: GuildMemberRemoveEvent) {
         val channel = botGuild.getTextChannelsByName("bans", true).firstOrNull()
         if(channel == null) {
             println("bans channel is null")
@@ -158,13 +193,7 @@ class UtilityListener: ListenerAdapter()
         val embedBuilder = EmbedBuilder()
         botGuild.retrieveAuditLogs().type(ActionType.KICK).queueAfter(2, TimeUnit.SECONDS) {
             val entry = it.filter {it.targetId == user.id && it.targetType == TargetType.MEMBER}.maxBy {it.timeCreated}
-            if(entry == null) {
-                println("Failed to find kick in audit log. Try increasing the delay.")
-            }
-            else if(entry.timeCreated.toInstant().isBefore(Instant.now().minus(1, ChronoUnit.MINUTES))) {
-                println("Old kick found. Not putting message in bans channel.")
-            }
-            else {
+            if(entry != null && entry.timeCreated.toInstant().isAfter(Instant.now().minus(1, ChronoUnit.MINUTES))) {
                 embedBuilder.appendDescription(":x: **${user.name}#${user.discriminator}** was `kicked`. (${user.id})\n\n*by* ${entry.user!!.asMention}\n**Reason:** ${entry.reason ?: "Not Specified"}")
                 channel.sendMessage(embedBuilder.build()).queue()
             }
@@ -201,11 +230,11 @@ class MessageListener: ListenerAdapter()
             try
             {
                 val content = suggestion.contentRaw.replace("@everyone", "@\u200Beveryone")
-                suggestionChannel?.sendMessage("A suggestion/complaint has been submitted: $content")?.queue {
+                suggestionChannel?.sendMessage("A suggestion/complaint has been submitted with id ${suggestion.id}: $content")?.queue {
                     event.channel.sendMessage("Thank you for making a suggestion or complaint. It has been anonymously forwarded to the moderation team").queue()
                     if(suggestion.attachments.isNotEmpty())
                         event.channel.sendMessage("1 or more attachments were found in your message. Attachments are not sent as part of a suggestion. Use links instead.").queue()
-                    suggestions.add(Triple(System.currentTimeMillis(), suggestion.id, it.id))
+                    suggestions.add(SuggestionMetaData(System.currentTimeMillis(), suggestion.id, it.id, suggestion.channel.id))
                 } ?: println("suggestion channel is null")
             }
             catch(iae: IllegalArgumentException)
@@ -213,7 +242,7 @@ class MessageListener: ListenerAdapter()
                 event.channel.sendMessage("Your suggestion or complaint was unable to be forwarded. Try a shorter message. If the problem persists contact the moderation team").queue()
             }
             
-            suggestions.removeIf {System.currentTimeMillis() - it.first > 60_000}
+            suggestions.removeIf {System.currentTimeMillis() - it.timestamp > 86400_000}
         }
     }
     
@@ -226,9 +255,9 @@ class MessageListener: ListenerAdapter()
         if(privateChannel)
         {
             val updatedSuggestion = event.message
-            val suggestionMetaData = suggestions.first {it.second == updatedSuggestion.id}
+            val suggestionMetaData = suggestions.first {it.suggestionMessageId == updatedSuggestion.id}
             suggestions.remove(suggestionMetaData)
-            val forwardedMessage = suggestionChannel?.retrieveMessageById(suggestionMetaData.third)?.complete()
+            val forwardedMessage = suggestionChannel?.retrieveMessageById(suggestionMetaData.forwardedSuggestionMessageId)?.complete()
             if(forwardedMessage == null)
             {
                 println("suggestion channel is null")
@@ -237,17 +266,17 @@ class MessageListener: ListenerAdapter()
             try
             {
                 val content = updatedSuggestion.contentRaw.replace("@everyone", "@\u200Beveryone")
-                forwardedMessage.editMessage("A suggestion/complaint has been submitted: $content").queue {
+                forwardedMessage.editMessage("A suggestion/complaint has been submitted with id ${updatedSuggestion.id}: $content").queue {
                     event.channel.sendMessage("Your suggestion or complaint has been successfully updated").queue()
-                    suggestions.add(Triple(System.currentTimeMillis(), updatedSuggestion.id, it.id))
+                    suggestions.add(SuggestionMetaData(System.currentTimeMillis(), updatedSuggestion.id, it.id, updatedSuggestion.channel.id))
                 }
             }
             catch(ise: IllegalStateException)
             {
                 event.channel.sendMessage("Your suggestion or complaint was unable to be updated. Try a shorter message or sending a new message. If the problem persists contact the moderation team").queue()
-                suggestions.add(suggestionMetaData.copy(System.currentTimeMillis()))
+                suggestions.add(suggestionMetaData.copy(timestamp = System.currentTimeMillis()))
             }
-            suggestions.removeIf {System.currentTimeMillis() - it.first > 60_000}
+            suggestions.removeIf {System.currentTimeMillis() - it.timestamp > 86400_000}
         }
     }
 }
@@ -334,7 +363,7 @@ fun takeActionAgainstUser(member: Member, ban: Boolean, reason: String, message:
         member.guild.addRoleToMember(member, actionRole).queue()
 
         moderatorChannel?.let {
-            it.sendMessage(adminRoles.joinToString(" ", postfix = "\n${member.asMention} has been detected spamming in <#${message.channel.id}> and was given ${actionRole.asMention}") {it.asMention}).queue()
+            it.sendMessage(adminRoles.joinToString(" ", postfix = "\n${member.asMention} has been detected spamming in <#${message.channel.id}> and was given ${actionRole.asMention}. Here is the message that triggered this: ${message.jumpUrl}") {it.asMention}).queue()
         } ?: println("moderator channel is null")
 
         val detentionChannel = member.guild.getTextChannelsByName("detention", true).firstOrNull()
@@ -350,7 +379,12 @@ fun hashMessage(message: Message): ByteArray
     val messageDigest = DigestUtils.getSha256Digest()
     messageDigest.update(message.channel.name.toByteArray())
     messageDigest.update(message.contentRaw.toByteArray())
-    message.attachments.forEach {messageDigest.update(retry(10) {it.retrieveInputStream().get().toByteArray()})}
+    message.attachments.forEach {
+        retryOrReturn(10, Unit) {
+            val byteArray = it.retrieveInputStream().get().use {it.toByteArray()}
+            messageDigest.update(byteArray)
+        }
+    }
     return messageDigest.digest()
 }
 

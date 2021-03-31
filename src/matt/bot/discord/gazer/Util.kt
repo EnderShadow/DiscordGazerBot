@@ -4,6 +4,7 @@ import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
+import org.json.JSONObject
 
 fun countMentions(message: Message) = message.mentionedChannels.size + message.mentionedRoles.size + message.mentionedUsers.size + if(message.mentionsEveryone()) 1 else 0
 
@@ -92,7 +93,29 @@ fun String.containsSparse(text: String): Boolean
 }
 
 data class SuggestionMetaData(val timestamp: Long, val suggestionMessageId: String, val forwardedSuggestionMessageId: String, val userChannelId: String): Comparable<SuggestionMetaData> {
+    companion object {
+        fun fromJSON(jsonObject: JSONObject): SuggestionMetaData {
+            val timestamp = jsonObject.getLong("timestamp")
+            val suggestionMessageId = jsonObject.getString("suggestionMessageId")
+            val forwardedSuggestionMessageId = jsonObject.getString("forwardedSuggestionMessageId")
+            val userChannelId = jsonObject.getString("userChannelId")
+            
+            return SuggestionMetaData(timestamp, suggestionMessageId, forwardedSuggestionMessageId, userChannelId)
+        }
+    }
+    
     override fun compareTo(other: SuggestionMetaData): Int {
         return timestamp.compareTo(other.timestamp)
+    }
+    
+    fun toJSON(): JSONObject {
+        val jsonObj = JSONObject()
+        
+        jsonObj.put("timestamp", timestamp)
+        jsonObj.put("suggestionMessageId", suggestionMessageId)
+        jsonObj.put("forwardedSuggestionMessageId", forwardedSuggestionMessageId)
+        jsonObj.put("userChannelId", userChannelId)
+        
+        return jsonObj
     }
 }

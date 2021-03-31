@@ -105,6 +105,8 @@ fun load() {
     val saveData = JSONObject(saveFile.readText())
     
     lastJoinTime = Instant.ofEpochSecond(saveData.getLong("lastJoinTimeSec"), saveData.getLong("lastJoinTimeNano"))
+    if(saveData.has("suggestions"))
+        saveData.getJSONArray("suggestions").map {SuggestionMetaData.fromJSON(it as JSONObject)}.let(suggestions::addAll)
 }
 
 fun save()
@@ -113,6 +115,7 @@ fun save()
     
     saveData.put("lastJoinTimeSec", lastJoinTime.epochSecond)
     saveData.put("lastJoinTimeNano", lastJoinTime.nano)
+    saveData.put("suggestions", suggestions.map(SuggestionMetaData::toJSON))
     
     saveFile.writeText(saveData.toString(4))
 }

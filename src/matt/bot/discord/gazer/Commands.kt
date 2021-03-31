@@ -127,7 +127,7 @@ sealed class Command(val prefix: String, val requiresAdmin: Boolean = false, val
             |**Usage:** ${botPrefix}reply [suggestion_id] [message]
             |
             |**Examples:**
-            |`${botPrefix}reply 1234567890 Your suggestion is bad and you should feel bad.` makes the bot reply to the suggestion with id 123456789 with 'Your suggestion is bad and you should feel bad.'
+            |`${botPrefix}reply 1234567890 Your suggestion is bad and you should feel bad.` makes the bot reply to the suggestion with id 1234567890 with 'Your suggestion is bad and you should feel bad.'
         """.trimMargin()
         
         override fun invoke(tokenizer: Tokenizer, sourceMessage: Message)

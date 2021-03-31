@@ -230,7 +230,7 @@ class MessageListener: ListenerAdapter()
             try
             {
                 val content = suggestion.contentRaw.replace("@everyone", "@\u200Beveryone")
-                suggestionChannel?.sendMessage("A suggestion/complaint has been submitted with id ${suggestion.id}: $content")?.queue {
+                suggestionChannel?.sendMessage("A suggestion/complaint has been submitted with id ${suggestion.id}.\n\n$content")?.queue {
                     event.channel.sendMessage("Thank you for making a suggestion or complaint. It has been anonymously forwarded to the moderation team").queue()
                     if(suggestion.attachments.isNotEmpty())
                         event.channel.sendMessage("1 or more attachments were found in your message. Attachments are not sent as part of a suggestion. Use links instead.").queue()
@@ -266,7 +266,7 @@ class MessageListener: ListenerAdapter()
             try
             {
                 val content = updatedSuggestion.contentRaw.replace("@everyone", "@\u200Beveryone")
-                forwardedMessage.editMessage("A suggestion/complaint has been submitted with id ${updatedSuggestion.id}: $content").queue {
+                forwardedMessage.editMessage("A suggestion/complaint has been submitted with id ${updatedSuggestion.id}:\n\n$content").queue {
                     event.channel.sendMessage("Your suggestion or complaint has been successfully updated").queue()
                     suggestions.add(SuggestionMetaData(System.currentTimeMillis(), updatedSuggestion.id, it.id, updatedSuggestion.channel.id))
                 }

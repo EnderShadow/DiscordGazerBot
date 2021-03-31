@@ -242,7 +242,8 @@ class MessageListener: ListenerAdapter()
                 event.channel.sendMessage("Your suggestion or complaint was unable to be forwarded. Try a shorter message. If the problem persists contact the moderation team").queue()
             }
             
-            suggestions.removeIf {System.currentTimeMillis() - it.timestamp > 86400_000}
+            // keep suggestions for 1 week
+            suggestions.removeIf {System.currentTimeMillis() - it.timestamp > 604800_000}
         }
     }
     
@@ -276,7 +277,9 @@ class MessageListener: ListenerAdapter()
                 event.channel.sendMessage("Your suggestion or complaint was unable to be updated. Try a shorter message or sending a new message. If the problem persists contact the moderation team").queue()
                 suggestions.add(suggestionMetaData.copy(timestamp = System.currentTimeMillis()))
             }
-            suggestions.removeIf {System.currentTimeMillis() - it.timestamp > 86400_000}
+            
+            // keep suggestions for 1 week
+            suggestions.removeIf {System.currentTimeMillis() - it.timestamp > 604800_000}
         }
     }
 }
